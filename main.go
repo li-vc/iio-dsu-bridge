@@ -124,6 +124,36 @@ func findIIODeviceByName(name string) (string, error) {
 	}
 }
 
+func findFirstIIODeviceWith(wantGyro, wantAccel bool) (string, error) {
+	if !wantGyro && !wantAccel {
+		return "", fmt.Errorf("must request gyro and/or accel")
+	}
+	base := "/sys/bus/iio/devices"
+	entries, err := os.ReadDir(base)
+	if err != nil {
+		return "", err
+	}
+
+	names := make([]string, 0, len(entries))
+	for _, e := range entries {
+		if e.IsDir() && strings.HasPrefix(e.Name(), "iio:device") {
+			names = append(names, e.Name())
+		}
+	}
+	sort.Strings(names)
+
+	for _, n := range names {
+		dev := filepath.Join(base, n)
+		hasGyro := fileExists(filepath.Join(dev, "in_anglvel_x_raw"))
+		hasAccel := fileExists(filepath.Join(dev, "in_accel_x_raw"))
+		if (wantGyro && !hasGyro) || (wantAccel && !hasAccel) {
+			continue
+		}
+		return dev, nil
+	}
+	return "", fmt.Errorf("no matching IIO device found (gyro=%v accel=%v)", wantGyro, wantAccel)
+}
+
 func readFloat(path string) (float64, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
@@ -364,7 +394,7 @@ func buildControllerData(s IMUSample) []byte {
 // ---------- Main ----------
 
 func main() {
-	name := flag.String("name", "bmi323-imu", "IIO device name (from /sys/bus/iio/devices/iio:deviceX/name)")
+	name := flag.String("name", "", "IIO device name (from /sys/bus/iio/devices/iio:deviceX/name, empty=auto)")
 	iioPath := flag.String("iio-path", "", "Explicit /sys/bus/iio/devices/iio:deviceX path (overrides --name)")
 	listIIO := flag.Bool("list-iio", false, "List detected IIO devices and exit")
 	addr := flag.String("addr", "127.0.0.1:26760", "DSU UDP destination")
@@ -431,6 +461,27 @@ func main() {
 	fmt.Printf("HaveGyro=%v GyroScale=(%.6f,%.6f,%.6f)  HaveAccel=%v AccelScale=(%.6f,%.6f,%.6f)\n",
 		dev.HaveGyro, dev.GyroScale.X, dev.GyroScale.Y, dev.GyroScale.Z,
 		dev.HaveAccel, dev.AccelScale.X, dev.AccelScale.Y, dev.AccelScale.Z)
+
+	// If the selected IIO device is split (accel-only or gyro-only), try to open the complementary device.
+	var gyroDev *IIODevice
+	var accelDev *IIODevice
+	baseClean := filepath.Clean(dev.Base)
+
+	if dev.HaveGyro && !dev.HaveAccel {
+		if p, err := findFirstIIODeviceWith(false, true); err == nil && filepath.Clean(p) != baseClean {
+			if d2, err := openIIODevice(p); err == nil && d2.HaveAccel {
+				accelDev = d2
+				fmt.Printf("Using additional accel device: %s\n", p)
+			}
+		}
+	} else if dev.HaveAccel && !dev.HaveGyro {
+		if p, err := findFirstIIODeviceWith(true, false); err == nil && filepath.Clean(p) != baseClean {
+			if d2, err := openIIODevice(p); err == nil && d2.HaveGyro {
+				gyroDev = d2
+				fmt.Printf("Using additional gyro device: %s\n", p)
+			}
+		}
+	}
 	
 	// Auto-set scales if requested and currently zero
 	if *setScales {
@@ -523,6 +574,17 @@ func main() {
 			}
 			continue
 		}
+		// Merge complementary split-device sample.
+		if gyroDev != nil {
+			if gs, err2 := gyroDev.readSample(); err2 == nil {
+				s.Gyro = gs.Gyro
+			}
+		}
+		if accelDev != nil {
+			if as, err2 := accelDev.readSample(); err2 == nil {
+				s.Accel = as.Accel
+			}
+		}
 		// aplicar mount matrix
 		s.Gyro = mount.Apply(s.Gyro)
 		s.Accel = mount.Apply(s.Accel)
@@ -538,6 +600,5 @@ func main() {
 		srv.Broadcast(s)
 	}
 }
-
 
 

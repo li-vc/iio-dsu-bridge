@@ -7,49 +7,50 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
-	"math"
-	"sort"
+
 	"gopkg.in/yaml.v3"
 )
 
 type Config struct {
-    IIOPath     string `yaml:"iio_path"`
-    Name        string `yaml:"name"`
-    Addr        string `yaml:"addr"`
-    Rate        int    `yaml:"rate"`
-    LogEvery    int    `yaml:"log_every"`
-    SetScales   *bool  `yaml:"set_scales"`
-    SetRate     *bool  `yaml:"set_rate"`
-    MountMatrix struct {
-        X []float64 `yaml:"x"`
-        Y []float64 `yaml:"y"`
-        Z []float64 `yaml:"z"`
-    } `yaml:"mount_matrix"`
+	IIOPath     string `yaml:"iio_path"`
+	Name        string `yaml:"name"`
+	Addr        string `yaml:"addr"`
+	Rate        int    `yaml:"rate"`
+	LogEvery    int    `yaml:"log_every"`
+	SetScales   *bool  `yaml:"set_scales"`
+	SetRate     *bool  `yaml:"set_rate"`
+	MountMatrix struct {
+		X []float64 `yaml:"x"`
+		Y []float64 `yaml:"y"`
+		Z []float64 `yaml:"z"`
+	} `yaml:"mount_matrix"`
 }
 
 func loadConfigFile() (*Config, error) {
-    cfgPath := filepath.Join(os.Getenv("HOME"), ".config", "iio-dsu-bridge.yaml")
-    b, err := os.ReadFile(cfgPath)
-    if err != nil {
-        return &Config{}, nil // silencioso si no existe
-    }
-    var c Config
-    if err := yaml.Unmarshal(b, &c); err != nil {
-        return nil, err
-    }
-    return &c, nil
+	cfgPath := filepath.Join(os.Getenv("HOME"), ".config", "iio-dsu-bridge.yaml")
+	b, err := os.ReadFile(cfgPath)
+	if err != nil {
+		return &Config{}, nil // silencioso si no existe
+	}
+	var c Config
+	if err := yaml.Unmarshal(b, &c); err != nil {
+		return nil, err
+	}
+	return &c, nil
 }
 
 type Vec3 struct{ X, Y, Z float64 }
 
 type IMUSample struct {
-	Gyro  Vec3  // rad/s
-	Accel Vec3  // m/s^2
+	Gyro  Vec3 // rad/s
+	Accel Vec3 // m/s^2
 	TSus  uint64
 }
 
@@ -69,6 +70,22 @@ func (m MountMatrix) Apply(v Vec3) Vec3 {
 
 // ---------- IIO helpers ----------
 
+// isIIODevice checks if a DirEntry is an IIO device (directory or symlink starting with "iio:device")
+func isIIODevice(e os.DirEntry) bool {
+	if !strings.HasPrefix(e.Name(), "iio:device") {
+		return false
+	}
+	// Check if it's a directory or a symlink (symlinks to directories are common in /sys)
+	if e.IsDir() {
+		return true
+	}
+	// For symlinks, check if the target exists (symlinks in /sys/bus/iio/devices point to device directories)
+	if e.Type()&os.ModeSymlink != 0 {
+		return true
+	}
+	return false
+}
+
 func findIIODeviceByName(name string) (string, error) {
 	base := "/sys/bus/iio/devices"
 	entries, err := os.ReadDir(base)
@@ -81,7 +98,7 @@ func findIIODeviceByName(name string) (string, error) {
 	var exact, partial, firstWithIMU string
 
 	for _, e := range entries {
-		if !e.IsDir() || !strings.HasPrefix(e.Name(), "iio:device") {
+		if !isIIODevice(e) {
 			continue
 		}
 		dev := filepath.Join(base, e.Name())
@@ -136,7 +153,7 @@ func findFirstIIODeviceWith(wantGyro, wantAccel bool) (string, error) {
 
 	names := make([]string, 0, len(entries))
 	for _, e := range entries {
-		if e.IsDir() && strings.HasPrefix(e.Name(), "iio:device") {
+		if isIIODevice(e) {
 			names = append(names, e.Name())
 		}
 	}
@@ -185,21 +202,29 @@ func readInt(path string) (int64, error) {
 
 func readFloatIfExists(path string) (float64, bool) {
 	b, err := os.ReadFile(path)
-	if err != nil { return 0, false }
+	if err != nil {
+		return 0, false
+	}
 	s := strings.TrimSpace(string(b))
 	f, err := strconv.ParseFloat(s, 64)
-	if err != nil { return 0, false }
+	if err != nil {
+		return 0, false
+	}
 	return f, true
 }
 
 func readFloatList(path string) ([]float64, error) {
 	b, err := os.ReadFile(path)
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 	fields := strings.Fields(string(b))
 	out := make([]float64, 0, len(fields))
 	for _, f := range fields {
 		v, err := strconv.ParseFloat(f, 64)
-		if err != nil { continue }
+		if err != nil {
+			continue
+		}
 		out = append(out, v)
 	}
 	if len(out) == 0 {
@@ -218,12 +243,15 @@ func writeInt(path string, v int) error {
 }
 
 func nearest(avail []float64, target float64) float64 {
-	if len(avail) == 0 { return target }
+	if len(avail) == 0 {
+		return target
+	}
 	best := avail[0]
-	minDiff := math.Abs(avail[0]-target)
+	minDiff := math.Abs(avail[0] - target)
 	for _, a := range avail[1:] {
-		if d := math.Abs(a-target); d < minDiff {
-			minDiff = d; best = a
+		if d := math.Abs(a - target); d < minDiff {
+			minDiff = d
+			best = a
 		}
 	}
 	return best
@@ -238,7 +266,7 @@ func listIIODevices() {
 	}
 	var names []string
 	for _, e := range entries {
-		if e.IsDir() && strings.HasPrefix(e.Name(), "iio:device") {
+		if isIIODevice(e) {
 			names = append(names, e.Name())
 		}
 	}
@@ -261,18 +289,18 @@ func fileExists(p string) bool {
 }
 
 type IIODevice struct {
-	Base          string
-	GyroScale     Vec3
-	AccelScale    Vec3
-	HaveAccel     bool
-	HaveGyro      bool
-	AngVelPaths   [3]string
-	AccelPaths    [3]string
-	AngVelScaleP  [3]string
-	AccelScaleP   [3]string
-	SampleRateHz  float64
-	AccelRateHz   float64
-	AngVelRateHz  float64
+	Base         string
+	GyroScale    Vec3
+	AccelScale   Vec3
+	HaveAccel    bool
+	HaveGyro     bool
+	AngVelPaths  [3]string
+	AccelPaths   [3]string
+	AngVelScaleP [3]string
+	AccelScaleP  [3]string
+	SampleRateHz float64
+	AccelRateHz  float64
+	AngVelRateHz float64
 }
 
 func openIIODevice(base string) (*IIODevice, error) {
@@ -308,9 +336,19 @@ func openIIODevice(base string) (*IIODevice, error) {
 	// leer escalas (si falta o da 0, intentar global)
 	if dev.HaveGyro {
 		var sx, sy, sz float64
-		if v, ok := readFloatIfExists(dev.AngVelScaleP[0]); ok { sx = v }
-		if v, ok := readFloatIfExists(dev.AngVelScaleP[1]); ok { sy = v } else { sy = sx }
-		if v, ok := readFloatIfExists(dev.AngVelScaleP[2]); ok { sz = v } else { sz = sx }
+		if v, ok := readFloatIfExists(dev.AngVelScaleP[0]); ok {
+			sx = v
+		}
+		if v, ok := readFloatIfExists(dev.AngVelScaleP[1]); ok {
+			sy = v
+		} else {
+			sy = sx
+		}
+		if v, ok := readFloatIfExists(dev.AngVelScaleP[2]); ok {
+			sz = v
+		} else {
+			sz = sx
+		}
 		// fallback global
 		if sx == 0 && sy == 0 && sz == 0 {
 			if v, ok := readFloatIfExists(filepath.Join(base, "in_anglvel_scale")); ok {
@@ -321,9 +359,19 @@ func openIIODevice(base string) (*IIODevice, error) {
 	}
 	if dev.HaveAccel {
 		var sx, sy, sz float64
-		if v, ok := readFloatIfExists(dev.AccelScaleP[0]); ok { sx = v }
-		if v, ok := readFloatIfExists(dev.AccelScaleP[1]); ok { sy = v } else { sy = sx }
-		if v, ok := readFloatIfExists(dev.AccelScaleP[2]); ok { sz = v } else { sz = sx }
+		if v, ok := readFloatIfExists(dev.AccelScaleP[0]); ok {
+			sx = v
+		}
+		if v, ok := readFloatIfExists(dev.AccelScaleP[1]); ok {
+			sy = v
+		} else {
+			sy = sx
+		}
+		if v, ok := readFloatIfExists(dev.AccelScaleP[2]); ok {
+			sz = v
+		} else {
+			sz = sx
+		}
 		// fallback global
 		if sx == 0 && sy == 0 && sz == 0 {
 			if v, ok := readFloatIfExists(filepath.Join(base, "in_accel_scale")); ok {
@@ -332,7 +380,6 @@ func openIIODevice(base string) (*IIODevice, error) {
 		}
 		dev.AccelScale = Vec3{X: sx, Y: sy, Z: sz}
 	}
-
 
 	// sample rates (si existen)
 	if f, err := readFloat(filepath.Join(base, "in_anglvel_sampling_frequency")); err == nil {
@@ -345,12 +392,73 @@ func openIIODevice(base string) (*IIODevice, error) {
 	return dev, nil
 }
 
+// configureDevice sets scales and sampling rates on an IIODevice if they are zero.
+// This is extracted as a reusable function to support split devices (separate accel/gyro).
+func configureDevice(dev *IIODevice, rate int, setScales, setRate bool) {
+	if dev == nil {
+		return
+	}
+
+	if setScales {
+		// Gyro scales
+		if dev.HaveGyro && dev.GyroScale.X == 0 && dev.GyroScale.Y == 0 && dev.GyroScale.Z == 0 {
+			if avail, err := readFloatList(filepath.Join(dev.Base, "in_anglvel_scales_available")); err == nil {
+				pick := avail[len(avail)/2] // pick middle value
+				if err := writeFloat(filepath.Join(dev.Base, "in_anglvel_scale"), pick); err == nil {
+					fmt.Printf("Set %s in_anglvel_scale=%g\n", dev.Base, pick)
+					dev.GyroScale = Vec3{X: pick, Y: pick, Z: pick}
+				}
+			}
+		}
+		// Accel scales
+		if dev.HaveAccel && dev.AccelScale.X == 0 && dev.AccelScale.Y == 0 && dev.AccelScale.Z == 0 {
+			if avail, err := readFloatList(filepath.Join(dev.Base, "in_accel_scales_available")); err == nil {
+				pick := avail[len(avail)/2]
+				if err := writeFloat(filepath.Join(dev.Base, "in_accel_scale"), pick); err == nil {
+					fmt.Printf("Set %s in_accel_scale=%g\n", dev.Base, pick)
+					dev.AccelScale = Vec3{X: pick, Y: pick, Z: pick}
+				}
+			}
+		}
+	}
+
+	if setRate {
+		// Gyro sampling frequency
+		if dev.HaveGyro {
+			if avail, err := readFloatList(filepath.Join(dev.Base, "in_anglvel_sampling_frequency_available")); err == nil {
+				pick := nearest(avail, float64(rate))
+				if err := writeFloat(filepath.Join(dev.Base, "in_anglvel_sampling_frequency"), pick); err == nil {
+					fmt.Printf("Set %s in_anglvel_sampling_frequency=%g\n", dev.Base, pick)
+				}
+			}
+		}
+		// Accel sampling frequency
+		if dev.HaveAccel {
+			if avail, err := readFloatList(filepath.Join(dev.Base, "in_accel_sampling_frequency_available")); err == nil {
+				pick := nearest(avail, float64(rate))
+				if err := writeFloat(filepath.Join(dev.Base, "in_accel_sampling_frequency"), pick); err == nil {
+					fmt.Printf("Set %s in_accel_sampling_frequency=%g\n", dev.Base, pick)
+				}
+			}
+		}
+	}
+}
+
 func (d *IIODevice) readSample() (IMUSample, error) {
 	s := IMUSample{TSus: uint64(time.Now().UnixMicro())}
 	if d.HaveGyro {
-		rx, err := readInt(d.AngVelPaths[0]); if err != nil { return s, err }
-		ry, err := readInt(d.AngVelPaths[1]); if err != nil { return s, err }
-		rz, err := readInt(d.AngVelPaths[2]); if err != nil { return s, err }
+		rx, err := readInt(d.AngVelPaths[0])
+		if err != nil {
+			return s, err
+		}
+		ry, err := readInt(d.AngVelPaths[1])
+		if err != nil {
+			return s, err
+		}
+		rz, err := readInt(d.AngVelPaths[2])
+		if err != nil {
+			return s, err
+		}
 		// convertir a rad/s (IIO suministra en unidades del sensor: raw * scale = rad/s)
 		s.Gyro = Vec3{
 			X: float64(rx) * d.GyroScale.X,
@@ -359,9 +467,18 @@ func (d *IIODevice) readSample() (IMUSample, error) {
 		}
 	}
 	if d.HaveAccel {
-		ax, err := readInt(d.AccelPaths[0]); if err != nil { return s, err }
-		ay, err := readInt(d.AccelPaths[1]); if err != nil { return s, err }
-		az, err := readInt(d.AccelPaths[2]); if err != nil { return s, err }
+		ax, err := readInt(d.AccelPaths[0])
+		if err != nil {
+			return s, err
+		}
+		ay, err := readInt(d.AccelPaths[1])
+		if err != nil {
+			return s, err
+		}
+		az, err := readInt(d.AccelPaths[2])
+		if err != nil {
+			return s, err
+		}
 		// convertir a m/s^2 (raw * scale = m/s^2)
 		s.Accel = Vec3{
 			X: float64(ax) * d.AccelScale.X,
@@ -412,25 +529,67 @@ func main() {
 	cfg, _ := loadConfigFile()
 
 	// ENV override
-	if v := os.Getenv("IIO_DSU_PATH"); v != "" { cfg.IIOPath = v }
-	if v := os.Getenv("IIO_DSU_NAME"); v != "" { cfg.Name = v }
-	if v := os.Getenv("IIO_DSU_ADDR"); v != "" { cfg.Addr = v }
-	if v := os.Getenv("IIO_DSU_RATE"); v != "" { if iv,err := strconv.Atoi(v); err==nil { cfg.Rate = iv } }
-	if v := os.Getenv("IIO_DSU_LOG_EVERY"); v != "" { if iv,err := strconv.Atoi(v); err==nil { cfg.LogEvery = iv } }
-	if v := os.Getenv("IIO_DSU_SET_SCALES"); v != "" { b := v=="1" || strings.ToLower(v)=="true"; cfg.SetScales = &b }
-	if v := os.Getenv("IIO_DSU_SET_RATE"); v != "" { b := v=="1" || strings.ToLower(v)=="true"; cfg.SetRate = &b }
+	if v := os.Getenv("IIO_DSU_PATH"); v != "" {
+		cfg.IIOPath = v
+	}
+	if v := os.Getenv("IIO_DSU_NAME"); v != "" {
+		cfg.Name = v
+	}
+	if v := os.Getenv("IIO_DSU_ADDR"); v != "" {
+		cfg.Addr = v
+	}
+	if v := os.Getenv("IIO_DSU_RATE"); v != "" {
+		if iv, err := strconv.Atoi(v); err == nil {
+			cfg.Rate = iv
+		}
+	}
+	if v := os.Getenv("IIO_DSU_LOG_EVERY"); v != "" {
+		if iv, err := strconv.Atoi(v); err == nil {
+			cfg.LogEvery = iv
+		}
+	}
+	if v := os.Getenv("IIO_DSU_SET_SCALES"); v != "" {
+		b := v == "1" || strings.ToLower(v) == "true"
+		cfg.SetScales = &b
+	}
+	if v := os.Getenv("IIO_DSU_SET_RATE"); v != "" {
+		b := v == "1" || strings.ToLower(v) == "true"
+		cfg.SetRate = &b
+	}
 
 	// Flags ganan sobre todo
-	if *iioPath != "" { cfg.IIOPath = *iioPath }
-	if *name != "" { cfg.Name = *name }  // solo si el flag trae algo
-	if *addr != "" { cfg.Addr = *addr }
-	if *rate != 0 { cfg.Rate = *rate }
-	if *logEvery >= 0 { cfg.LogEvery = *logEvery }
-	if cfg.SetScales == nil { cfg.SetScales = setScales } else { *setScales = *cfg.SetScales }
-	if cfg.SetRate == nil   { cfg.SetRate   = setRate }   else { *setRate   = *cfg.SetRate }
+	if *iioPath != "" {
+		cfg.IIOPath = *iioPath
+	}
+	if *name != "" {
+		cfg.Name = *name
+	} // solo si el flag trae algo
+	if *addr != "" {
+		cfg.Addr = *addr
+	}
+	if *rate != 0 {
+		cfg.Rate = *rate
+	}
+	if *logEvery >= 0 {
+		cfg.LogEvery = *logEvery
+	}
+	if cfg.SetScales == nil {
+		cfg.SetScales = setScales
+	} else {
+		*setScales = *cfg.SetScales
+	}
+	if cfg.SetRate == nil {
+		cfg.SetRate = setRate
+	} else {
+		*setRate = *cfg.SetRate
+	}
 
-	if cfg.Addr == "" { cfg.Addr = "127.0.0.1:26760" }
-	if cfg.Rate == 0  { cfg.Rate = 250 }
+	if cfg.Addr == "" {
+		cfg.Addr = "127.0.0.1:26760"
+	}
+	if cfg.Rate == 0 {
+		cfg.Rate = 250
+	}
 
 	// Elegir device
 	var iioBase string
@@ -482,73 +641,66 @@ func main() {
 			}
 		}
 	}
-	
-	// Auto-set scales if requested and currently zero
-	if *setScales {
-		changed := false
-		// Gyro
-		if dev.HaveGyro && dev.GyroScale.X == 0 && dev.GyroScale.Y == 0 && dev.GyroScale.Z == 0 {
-			if avail, err := readFloatList(filepath.Join(iioBase, "in_anglvel_scales_available")); err == nil {
-				pick := avail[len(avail)/2] // el del medio
-				if err := writeFloat(filepath.Join(iioBase, "in_anglvel_scale"), pick); err == nil {
-					fmt.Printf("Set in_anglvel_scale=%g\n", pick)
-					dev.GyroScale = Vec3{X: pick, Y: pick, Z: pick}
-					changed = true
-				}
-			}
-		}
-		// Accel
-		if dev.HaveAccel && dev.AccelScale.X == 0 && dev.AccelScale.Y == 0 && dev.AccelScale.Z == 0 {
-			if avail, err := readFloatList(filepath.Join(iioBase, "in_accel_scales_available")); err == nil {
-				pick := avail[len(avail)/2]
-				if err := writeFloat(filepath.Join(iioBase, "in_accel_scale"), pick); err == nil {
-					fmt.Printf("Set in_accel_scale=%g\n", pick)
-					dev.AccelScale = Vec3{X: pick, Y: pick, Z: pick}
-					changed = true
-				}
-			}
-		}
-		if changed {
-			fmt.Printf("New scales → Gyro(%.6f) Accel(%.6f)\n", dev.GyroScale.X, dev.AccelScale.X)
-		}
+
+	// Configure scales and rates for all devices (primary + secondary)
+	configureDevice(dev, *rate, *setScales, *setRate)
+	if gyroDev != nil {
+		configureDevice(gyroDev, *rate, *setScales, *setRate)
+		fmt.Printf("Secondary gyro device: %s GyroScale=(%.6f,%.6f,%.6f)\n",
+			gyroDev.Base, gyroDev.GyroScale.X, gyroDev.GyroScale.Y, gyroDev.GyroScale.Z)
+	}
+	if accelDev != nil {
+		configureDevice(accelDev, *rate, *setScales, *setRate)
+		fmt.Printf("Secondary accel device: %s AccelScale=(%.6f,%.6f,%.6f)\n",
+			accelDev.Base, accelDev.AccelScale.X, accelDev.AccelScale.Y, accelDev.AccelScale.Z)
 	}
 
-	// Auto-set sampling frequency
-	if *setRate {
-		// gyro
-		if dev.HaveGyro {
-			if avail, err := readFloatList(filepath.Join(iioBase, "in_anglvel_sampling_frequency_available")); err == nil {
-				pick := nearest(avail, float64(*rate))
-				if err := writeFloat(filepath.Join(iioBase, "in_anglvel_sampling_frequency"), pick); err == nil {
-					fmt.Printf("Set in_anglvel_sampling_frequency=%g\n", pick)
-				}
-			}
-		}
-		// accel
-		if dev.HaveAccel {
-			if avail, err := readFloatList(filepath.Join(iioBase, "in_accel_sampling_frequency_available")); err == nil {
-				pick := nearest(avail, float64(*rate))
-				if err := writeFloat(filepath.Join(iioBase, "in_accel_sampling_frequency"), pick); err == nil {
-					fmt.Printf("Set in_accel_sampling_frequency=%g\n", pick)
-				}
-			}
-		}
+	// Validate we have working sensors after configuration
+	hasWorkingGyro := (dev.HaveGyro && dev.GyroScale.X != 0) ||
+		(gyroDev != nil && gyroDev.GyroScale.X != 0)
+	hasWorkingAccel := (dev.HaveAccel && dev.AccelScale.X != 0) ||
+		(accelDev != nil && accelDev.AccelScale.X != 0)
+
+	if !hasWorkingGyro {
+		fmt.Fprintf(os.Stderr, "WARNING: No working gyroscope found (scale=0). Motion controls will not work!\n")
+		fmt.Fprintf(os.Stderr, "         Try running with elevated permissions or check if the device driver is loaded.\n")
+	}
+	if !hasWorkingAccel {
+		fmt.Fprintf(os.Stderr, "WARNING: No working accelerometer found (scale=0). Motion controls will not work!\n")
+		fmt.Fprintf(os.Stderr, "         Try running with elevated permissions or check if the device driver is loaded.\n")
 	}
 
-	// Mount matrix igual a tu YAML:
-	// x: [1, 0, 0]
-	// y: [0, -1, 0]
-	// z: [0, 0, -1]
+	// Mount matrix - default for ROG Ally
 	mount := MountMatrix{
 		X: Vec3{1, 0, 0},
-		Y: Vec3{0,-1, 0},
-		Z: Vec3{0, 0,-1},
+		Y: Vec3{0, -1, 0},
+		Z: Vec3{0, 0, -1},
 	}
-	if len(cfg.MountMatrix.X)==3 && len(cfg.MountMatrix.Y)==3 && len(cfg.MountMatrix.Z)==3 {
+
+	// Check if config file provides a mount matrix
+	if len(cfg.MountMatrix.X) == 3 && len(cfg.MountMatrix.Y) == 3 && len(cfg.MountMatrix.Z) == 3 {
 		mount = MountMatrix{
 			X: Vec3{cfg.MountMatrix.X[0], cfg.MountMatrix.X[1], cfg.MountMatrix.X[2]},
 			Y: Vec3{cfg.MountMatrix.Y[0], cfg.MountMatrix.Y[1], cfg.MountMatrix.Y[2]},
 			Z: Vec3{cfg.MountMatrix.Z[0], cfg.MountMatrix.Z[1], cfg.MountMatrix.Z[2]},
+		}
+		fmt.Println("Using mount matrix from config file")
+	} else {
+		// Auto-detect device and use appropriate mount matrix
+		devNameBytes, _ := os.ReadFile(filepath.Join(iioBase, "name"))
+		devName := strings.ToLower(strings.TrimSpace(string(devNameBytes)))
+
+		// Legion Go S uses BMI sensors; also check for "legion" in name
+		if strings.Contains(devName, "legion") || strings.Contains(devName, "bmi") {
+			// Legion Go S experimental mount matrix - may need adjustment
+			fmt.Printf("Detected device %q, using Legion Go S experimental mount matrix\n", devName)
+			mount = MountMatrix{
+				X: Vec3{1, 0, 0},
+				Y: Vec3{0, 1, 0},
+				Z: Vec3{0, 0, 1},
+			}
+		} else {
+			fmt.Printf("Using default mount matrix for device %q (ROG Ally compatible)\n", devName)
 		}
 	}
 
@@ -561,11 +713,13 @@ func main() {
 	defer srv.Close()
 	fmt.Println("DSU server listening on :26760")
 
-	// Bucle a tasa fija
+	// Main loop at fixed rate
 	ticker := time.NewTicker(time.Second / time.Duration(*rate))
 	defer ticker.Stop()
 
 	count := 0
+	zeroGyroCount := 0
+	zeroGyroWarned := false
 	for range ticker.C {
 		s, err := dev.readSample()
 		if err != nil {
@@ -585,9 +739,21 @@ func main() {
 				s.Accel = as.Accel
 			}
 		}
-		// aplicar mount matrix
+		// Apply mount matrix
 		s.Gyro = mount.Apply(s.Gyro)
 		s.Accel = mount.Apply(s.Accel)
+
+		// Warn if gyro stays zero for extended period (likely misconfigured)
+		if s.Gyro.X == 0 && s.Gyro.Y == 0 && s.Gyro.Z == 0 {
+			zeroGyroCount++
+			if zeroGyroCount >= 100 && !zeroGyroWarned {
+				fmt.Fprintf(os.Stderr, "WARNING: Gyro has been zero for %d samples. Check device scales or permissions.\n", zeroGyroCount)
+				zeroGyroWarned = true
+			}
+		} else {
+			zeroGyroCount = 0
+			zeroGyroWarned = false
+		}
 
 		if *logEvery > 0 {
 			count++
@@ -600,5 +766,3 @@ func main() {
 		srv.Broadcast(s)
 	}
 }
-
-

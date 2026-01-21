@@ -215,16 +215,24 @@ func (s *DSUServer) handleDataSubscribe(req []byte, addr *net.UDPAddr) {
 	}
 }
 
+// sanitizeFloat32 returns 0 if the value is NaN or Infinity to prevent crashes in DSU clients.
+func sanitizeFloat32(v float32) float32 {
+	if math.IsNaN(float64(v)) || math.IsInf(float64(v), 0) {
+		return 0
+	}
+	return v
+}
+
 // Broadcast one IMU sample (already mount-adjusted & scaled to SI units).
 func (s *DSUServer) Broadcast(sample IMUSample) {
-	// convert units for DSU
-	ax := float32(sample.Accel.X / 9.80665) // m/s^2 → g
-	ay := float32(sample.Accel.Y / 9.80665)
-	az := float32(sample.Accel.Z / 9.80665)
+	// convert units for DSU and sanitize to prevent NaN/Infinity crashes
+	ax := sanitizeFloat32(float32(sample.Accel.X / 9.80665)) // m/s^2 → g
+	ay := sanitizeFloat32(float32(sample.Accel.Y / 9.80665))
+	az := sanitizeFloat32(float32(sample.Accel.Z / 9.80665))
 	const rad2deg = 180.0 / math.Pi
-	gx := float32(sample.Gyro.X * rad2deg) // rad/s → deg/s
-	gy := float32(sample.Gyro.Y * rad2deg)
-	gz := float32(sample.Gyro.Z * rad2deg)
+	gx := sanitizeFloat32(float32(sample.Gyro.X * rad2deg)) // rad/s → deg/s
+	gy := sanitizeFloat32(float32(sample.Gyro.Y * rad2deg))
+	gz := sanitizeFloat32(float32(sample.Gyro.Z * rad2deg))
 
 	s.mu.Lock()
 	defer s.mu.Unlock()

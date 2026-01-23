@@ -15,7 +15,7 @@ CONFIG_FILE="$CONFIG_DIR/iio-dsu-bridge.yaml"
 SERVICE_FILE="$CONFIG_DIR/systemd/user/${SERVICE_NAME}.service"
 
 # Base URL for release assets
-RELEASE_URL="https://github.com/TDemeco/iio-dsu-bridge/releases/latest/download"
+RELEASE_URL="https://github.com/Sebalvarez97/iio-dsu-bridge/releases/latest/download"
 
 echo "============================================"
 echo "  iio-dsu-bridge Installer"

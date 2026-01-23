@@ -19,13 +19,13 @@ import (
 )
 
 type Config struct {
-	IIOPath     string `yaml:"iio_path"`
-	Name        string `yaml:"name"`
-	Addr        string `yaml:"addr"`
-	Rate        int    `yaml:"rate"`
-	LogEvery    int    `yaml:"log_every"`
-	SetScales   *bool  `yaml:"set_scales"`
-	SetRate     *bool  `yaml:"set_rate"`
+	IIOPath   string `yaml:"iio_path"`
+	Name      string `yaml:"name"`
+	Addr      string `yaml:"addr"`
+	Rate      int    `yaml:"rate"`
+	LogEvery  int    `yaml:"log_every"`
+	SetScales *bool  `yaml:"set_scales"`
+	SetRate   *bool  `yaml:"set_rate"`
 	// MountMatrix applies to both sensors (legacy/fallback)
 	MountMatrix struct {
 		X []float64 `yaml:"x"`
@@ -706,8 +706,8 @@ func main() {
 		fmt.Fprintf(os.Stderr, "ERROR: No mount matrix configured.\n")
 		fmt.Fprintf(os.Stderr, "Please create a config file at ~/.config/iio-dsu-bridge.yaml\n")
 		fmt.Fprintf(os.Stderr, "Example configs for supported devices:\n")
-		fmt.Fprintf(os.Stderr, "  - Legion Go S: https://github.com/TDemeco/iio-dsu-bridge/blob/main/examples/legion-go-s.yaml\n")
-		fmt.Fprintf(os.Stderr, "  - ROG Ally:    https://github.com/TDemeco/iio-dsu-bridge/blob/main/examples/rog-ally.yaml\n")
+		fmt.Fprintf(os.Stderr, "  - Legion Go S: https://github.com/Sebalvarez97/iio-dsu-bridge/blob/main/examples/legion-go-s.yaml\n")
+		fmt.Fprintf(os.Stderr, "  - ROG Ally:    https://github.com/Sebalvarez97/iio-dsu-bridge/blob/main/examples/rog-ally.yaml\n")
 		os.Exit(1)
 	}
 

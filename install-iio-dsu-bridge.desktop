@@ -3,6 +3,6 @@ Type=Application
 Name=Install IIO-DSU Bridge
 Comment=Download and install iio-dsu-bridge as a user service
 Terminal=true
-Exec=bash -lc 'bash <(curl -fsSL https://github.com/TDemeco/iio-dsu-bridge/releases/latest/download/install.sh); echo; read -n1 -rsp "Done. Press any key to close... "'
+Exec=bash -lc 'bash <(curl -fsSL https://github.com/Sebalvarez97/iio-dsu-bridge/releases/latest/download/install.sh); echo; read -n1 -rsp "Done. Press any key to close... "'
 Icon=system-software-install
 Categories=Utility;

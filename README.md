@@ -7,6 +7,10 @@ IIO Bridge to generate motion sensor data for a DSU server, enabling gyro/motion
 - **ROG Ally** - Combined IMU device
 - **Legion Go S** - Separate accelerometer and gyroscope IIO devices
 
+## Especial Thanks to
+ - [Tobi Demeco](https://github.com/TDemeco) (Legion Go S support + configs and other improvements)
+ - [Christopher Lott](https://github.com/christopherl) (Legion Go S support)
+
 ## Quick Install (SteamOS Desktop Mode)
 
 ### Option 1: Desktop Shortcut
@@ -17,7 +21,7 @@ IIO Bridge to generate motion sensor data for a DSU server, enabling gyro/motion
 
 ### Option 2: Terminal
 ```bash
-bash <(curl -fsSL https://github.com/TDemeco/iio-dsu-bridge/releases/latest/download/install.sh)
+bash <(curl -fsSL https://github.com/Sebalvarez97/iio-dsu-bridge/releases/latest/download/install.sh)
 ```
 
 The installer will:
@@ -35,17 +39,17 @@ If you prefer to install manually:
 ```bash
 # 1. Download the binary
 mkdir -p ~/.local/bin
-curl -fL https://github.com/TDemeco/iio-dsu-bridge/releases/latest/download/iio-dsu-bridge -o ~/.local/bin/iio-dsu-bridge
+curl -fL https://github.com/Sebalvarez97/iio-dsu-bridge/releases/latest/download/iio-dsu-bridge -o ~/.local/bin/iio-dsu-bridge
 chmod +x ~/.local/bin/iio-dsu-bridge
 
 # 2. Download the config for your device
 mkdir -p ~/.config
 
 # For ROG Ally:
-curl -fL https://github.com/TDemeco/iio-dsu-bridge/releases/latest/download/rog-ally.yaml -o ~/.config/iio-dsu-bridge.yaml
+curl -fL https://github.com/Sebalvarez97/iio-dsu-bridge/releases/latest/download/rog-ally.yaml -o ~/.config/iio-dsu-bridge.yaml
 
 # For Legion Go S:
-curl -fL https://github.com/TDemeco/iio-dsu-bridge/releases/latest/download/legion-go-s.yaml -o ~/.config/iio-dsu-bridge.yaml
+curl -fL https://github.com/Sebalvarez97/iio-dsu-bridge/releases/latest/download/legion-go-s.yaml -o ~/.config/iio-dsu-bridge.yaml
 
 # 3. Create systemd service
 mkdir -p ~/.config/systemd/user
@@ -167,17 +171,17 @@ ERROR: No mount matrix configured.
 You need a config file. Download the one for your device:
 ```bash
 # ROG Ally
-curl -fL https://github.com/TDemeco/iio-dsu-bridge/releases/latest/download/rog-ally.yaml -o ~/.config/iio-dsu-bridge.yaml
+curl -fL https://github.com/Sebalvarez97/iio-dsu-bridge/releases/latest/download/rog-ally.yaml -o ~/.config/iio-dsu-bridge.yaml
 
 # Legion Go S
-curl -fL https://github.com/TDemeco/iio-dsu-bridge/releases/latest/download/legion-go-s.yaml -o ~/.config/iio-dsu-bridge.yaml
+curl -fL https://github.com/Sebalvarez97/iio-dsu-bridge/releases/latest/download/legion-go-s.yaml -o ~/.config/iio-dsu-bridge.yaml
 ```
 
 ## Uninstall
 
 ### Option 1: Script
 ```bash
-bash <(curl -fsSL https://github.com/TDemeco/iio-dsu-bridge/releases/latest/download/uninstall.sh)
+bash <(curl -fsSL https://github.com/Sebalvarez97/iio-dsu-bridge/releases/latest/download/uninstall.sh)
 ```
 
 ### Option 2: Desktop Shortcut
@@ -196,7 +200,7 @@ systemctl --user daemon-reload
 
 ```bash
 # Clone the repository
-git clone https://github.com/TDemeco/iio-dsu-bridge.git
+git clone https://github.com/Sebalvarez97/iio-dsu-bridge.git
 cd iio-dsu-bridge
 
 # Build
@@ -210,3 +214,6 @@ cp examples/rog-ally.yaml ~/.config/iio-dsu-bridge.yaml
 # Run
 ./iio-dsu-bridge --log-every=25
 ```
+
+
+ 

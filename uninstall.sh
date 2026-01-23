@@ -1,19 +1,36 @@
 #!/usr/bin/env bash
 set -e
 
-# Minimal uninstaller for iio-dsu-bridge
+# Uninstaller for iio-dsu-bridge
+# Removes the binary, config file, and systemd service
+
 SERVICE_NAME="iio-dsu-bridge"
-SERVICE_FILE="$HOME/.config/systemd/user/${SERVICE_NAME}.service"
 BIN_PATH="$HOME/.local/bin/iio-dsu-bridge"
+CONFIG_FILE="$HOME/.config/iio-dsu-bridge.yaml"
+SERVICE_FILE="$HOME/.config/systemd/user/${SERVICE_NAME}.service"
+
+echo "============================================"
+echo "  iio-dsu-bridge Uninstaller"
+echo "============================================"
+echo ""
 
 echo "==> Stopping and disabling service..."
-systemctl --user disable --now "${SERVICE_NAME}.service" || true
+systemctl --user disable --now "${SERVICE_NAME}.service" 2>/dev/null || true
 
 echo "==> Removing files..."
 rm -f "$SERVICE_FILE"
 rm -f "$BIN_PATH"
+rm -f "$CONFIG_FILE"
 
 echo "==> Reloading systemd user daemon..."
-systemctl --user daemon-reload || true
+systemctl --user daemon-reload 2>/dev/null || true
 
-echo "==> Uninstall complete."
+echo ""
+echo "============================================"
+echo "  Uninstall complete!"
+echo "============================================"
+echo ""
+echo "Removed:"
+echo "  - $BIN_PATH"
+echo "  - $CONFIG_FILE"
+echo "  - $SERVICE_FILE"

@@ -1,0 +1,11 @@
+# iio-dsu-bridge configuration for ROG Ally
+#
+# Copy this file to ~/.config/iio-dsu-bridge.yaml
+#
+# The ROG Ally has a combined IMU device.
+
+# Mount matrix (applies to both accelerometer and gyroscope)
+mount_matrix:
+    x: [1, 0, 0]
+    y: [0, -1, 0]
+    z: [0, 0, -1]

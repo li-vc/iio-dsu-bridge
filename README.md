@@ -11,9 +11,9 @@ IIO Bridge to generate motion sensor data for a DSU server, enabling gyro/motion
 
 ### Option 1: Desktop Shortcut
 1. Download `install-iio-dsu-bridge.desktop` from the latest Release
-2. In Dolphin, right-click it and click **Allow Launching**
+2. In Dolphin, right-click it and click **Allow Launching** (or Properties → Permissions → “Is executable”)
 3. Double-click it to run the installer
-4. Select your device when prompted (Legion Go S or ROG Ally)
+4. Select your device when prompted (ROG Ally or Legion Go S)
 
 ### Option 2: Terminal
 ```bash
@@ -41,11 +41,11 @@ chmod +x ~/.local/bin/iio-dsu-bridge
 # 2. Download the config for your device
 mkdir -p ~/.config
 
-# For Legion Go S:
-curl -fL https://github.com/TDemeco/iio-dsu-bridge/releases/latest/download/legion-go-s.yaml -o ~/.config/iio-dsu-bridge.yaml
-
 # For ROG Ally:
 curl -fL https://github.com/TDemeco/iio-dsu-bridge/releases/latest/download/rog-ally.yaml -o ~/.config/iio-dsu-bridge.yaml
+
+# For Legion Go S:
+curl -fL https://github.com/TDemeco/iio-dsu-bridge/releases/latest/download/legion-go-s.yaml -o ~/.config/iio-dsu-bridge.yaml
 
 # 3. Create systemd service
 mkdir -p ~/.config/systemd/user
@@ -93,6 +93,15 @@ sudo loginctl enable-linger $USER
 
 The config file is located at `~/.config/iio-dsu-bridge.yaml`
 
+### ROG Ally Config
+
+```yaml
+mount_matrix:
+  x: [1, 0, 0]
+  y: [0, -1, 0]
+  z: [0, 0, -1]
+```
+
 ### Legion Go S Config
 
 ```yaml
@@ -105,15 +114,6 @@ gyro_matrix:
   x: [1, 0, 0]
   y: [0, 0, 1]
   z: [0, 1, 0]
-```
-
-### ROG Ally Config
-
-```yaml
-mount_matrix:
-  x: [1, 0, 0]
-  y: [0, -1, 0]
-  z: [0, 0, -1]
 ```
 
 ## Command Line Options
@@ -166,11 +166,11 @@ ERROR: No mount matrix configured.
 ```
 You need a config file. Download the one for your device:
 ```bash
-# Legion Go S
-curl -fL https://github.com/TDemeco/iio-dsu-bridge/releases/latest/download/legion-go-s.yaml -o ~/.config/iio-dsu-bridge.yaml
-
 # ROG Ally
 curl -fL https://github.com/TDemeco/iio-dsu-bridge/releases/latest/download/rog-ally.yaml -o ~/.config/iio-dsu-bridge.yaml
+
+# Legion Go S
+curl -fL https://github.com/TDemeco/iio-dsu-bridge/releases/latest/download/legion-go-s.yaml -o ~/.config/iio-dsu-bridge.yaml
 ```
 
 ## Uninstall

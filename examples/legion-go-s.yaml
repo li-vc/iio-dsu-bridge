@@ -1,0 +1,21 @@
+# iio-dsu-bridge configuration for Legion Go S
+#
+# Copy this file to ~/.config/iio-dsu-bridge.yaml
+#
+# The Legion Go S exposes accelerometer and gyroscope as separate IIO devices.
+# This configuration fixes the accelerometer Z-axis inversion that causes
+# the "pulling back" issue in emulators.
+
+# Accelerometer mount matrix
+# Z-axis is inverted to match the expected gravity direction
+accel_matrix:
+  x: [1, 0, 0]
+  y: [0, 1, 0]
+  z: [0, 0, -1]
+
+# Gyroscope mount matrix
+# Identity matrix (no transformation needed)
+gyro_matrix:
+  x: [1, 0, 0]
+  y: [0, 1, 0]
+  z: [0, 0, 1]

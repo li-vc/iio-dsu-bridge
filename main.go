@@ -26,11 +26,24 @@ type Config struct {
 	LogEvery    int    `yaml:"log_every"`
 	SetScales   *bool  `yaml:"set_scales"`
 	SetRate     *bool  `yaml:"set_rate"`
+	// MountMatrix applies to both sensors (legacy/fallback)
 	MountMatrix struct {
 		X []float64 `yaml:"x"`
 		Y []float64 `yaml:"y"`
 		Z []float64 `yaml:"z"`
 	} `yaml:"mount_matrix"`
+	// AccelMatrix applies only to accelerometer (overrides MountMatrix for accel)
+	AccelMatrix struct {
+		X []float64 `yaml:"x"`
+		Y []float64 `yaml:"y"`
+		Z []float64 `yaml:"z"`
+	} `yaml:"accel_matrix"`
+	// GyroMatrix applies only to gyroscope (overrides MountMatrix for gyro)
+	GyroMatrix struct {
+		X []float64 `yaml:"x"`
+		Y []float64 `yaml:"y"`
+		Z []float64 `yaml:"z"`
+	} `yaml:"gyro_matrix"`
 }
 
 func loadConfigFile() (*Config, error) {
@@ -519,6 +532,8 @@ func main() {
 	logEvery := flag.Int("log-every", 25, "Print one IMU line every N samples (0=off)")
 	setScales := flag.Bool("set-scales", true, "If scales read as 0, set them to a valid value automatically")
 	setRate := flag.Bool("set-rate", true, "Try to set sampling_frequency close to --rate")
+	debugRaw := flag.Bool("debug-raw", false, "Show raw sensor values before mount matrix transformation")
+	debugDSU := flag.Bool("debug-dsu", false, "Show final DSU packet values (in g and deg/s)")
 	flag.Parse()
 
 	if *listIIO {
@@ -670,39 +685,81 @@ func main() {
 		fmt.Fprintf(os.Stderr, "         Try running with elevated permissions or check if the device driver is loaded.\n")
 	}
 
-	// Mount matrix - default for ROG Ally
-	mount := MountMatrix{
+	// Separate mount matrices for accelerometer and gyroscope
+	// This allows correcting for different physical orientations of the sensors
+	identityMatrix := MountMatrix{
+		X: Vec3{1, 0, 0},
+		Y: Vec3{0, 1, 0},
+		Z: Vec3{0, 0, 1},
+	}
+	rogAllyMatrix := MountMatrix{
 		X: Vec3{1, 0, 0},
 		Y: Vec3{0, -1, 0},
 		Z: Vec3{0, 0, -1},
 	}
 
-	// Check if config file provides a mount matrix
-	if len(cfg.MountMatrix.X) == 3 && len(cfg.MountMatrix.Y) == 3 && len(cfg.MountMatrix.Z) == 3 {
-		mount = MountMatrix{
-			X: Vec3{cfg.MountMatrix.X[0], cfg.MountMatrix.X[1], cfg.MountMatrix.X[2]},
-			Y: Vec3{cfg.MountMatrix.Y[0], cfg.MountMatrix.Y[1], cfg.MountMatrix.Y[2]},
-			Z: Vec3{cfg.MountMatrix.Z[0], cfg.MountMatrix.Z[1], cfg.MountMatrix.Z[2]},
+	// Helper to parse matrix from config
+	parseMatrix := func(x, y, z []float64) (MountMatrix, bool) {
+		if len(x) == 3 && len(y) == 3 && len(z) == 3 {
+			return MountMatrix{
+				X: Vec3{x[0], x[1], x[2]},
+				Y: Vec3{y[0], y[1], y[2]},
+				Z: Vec3{z[0], z[1], z[2]},
+			}, true
 		}
-		fmt.Println("Using mount matrix from config file")
+		return MountMatrix{}, false
+	}
+
+	// Determine base matrix (from mount_matrix or device detection)
+	var baseMatrix MountMatrix
+	var baseMatrixSource string
+
+	if m, ok := parseMatrix(cfg.MountMatrix.X, cfg.MountMatrix.Y, cfg.MountMatrix.Z); ok {
+		baseMatrix = m
+		baseMatrixSource = "config mount_matrix"
 	} else {
-		// Auto-detect device and use appropriate mount matrix
+		// Auto-detect device and use appropriate default
 		devNameBytes, _ := os.ReadFile(filepath.Join(iioBase, "name"))
 		devName := strings.ToLower(strings.TrimSpace(string(devNameBytes)))
 
-		// Legion Go S uses BMI sensors; also check for "legion" in name
 		if strings.Contains(devName, "legion") || strings.Contains(devName, "bmi") {
-			// Legion Go S experimental mount matrix - may need adjustment
-			fmt.Printf("Detected device %q, using Legion Go S experimental mount matrix\n", devName)
-			mount = MountMatrix{
-				X: Vec3{1, 0, 0},
-				Y: Vec3{0, 1, 0},
-				Z: Vec3{0, 0, 1},
-			}
+			baseMatrix = identityMatrix
+			baseMatrixSource = fmt.Sprintf("Legion Go S default (device: %s)", devName)
 		} else {
-			fmt.Printf("Using default mount matrix for device %q (ROG Ally compatible)\n", devName)
+			baseMatrix = rogAllyMatrix
+			baseMatrixSource = fmt.Sprintf("ROG Ally default (device: %s)", devName)
 		}
 	}
+
+	// Set accel matrix: accel_matrix > mount_matrix > device default
+	var accelMount MountMatrix
+	if m, ok := parseMatrix(cfg.AccelMatrix.X, cfg.AccelMatrix.Y, cfg.AccelMatrix.Z); ok {
+		accelMount = m
+		fmt.Println("Accel matrix: from config accel_matrix")
+	} else {
+		accelMount = baseMatrix
+		fmt.Printf("Accel matrix: from %s\n", baseMatrixSource)
+	}
+
+	// Set gyro matrix: gyro_matrix > mount_matrix > device default
+	var gyroMount MountMatrix
+	if m, ok := parseMatrix(cfg.GyroMatrix.X, cfg.GyroMatrix.Y, cfg.GyroMatrix.Z); ok {
+		gyroMount = m
+		fmt.Println("Gyro matrix: from config gyro_matrix")
+	} else {
+		gyroMount = baseMatrix
+		fmt.Printf("Gyro matrix: from %s\n", baseMatrixSource)
+	}
+
+	// Log the actual matrices being used
+	fmt.Printf("  Accel: X=[%.1f,%.1f,%.1f] Y=[%.1f,%.1f,%.1f] Z=[%.1f,%.1f,%.1f]\n",
+		accelMount.X.X, accelMount.X.Y, accelMount.X.Z,
+		accelMount.Y.X, accelMount.Y.Y, accelMount.Y.Z,
+		accelMount.Z.X, accelMount.Z.Y, accelMount.Z.Z)
+	fmt.Printf("  Gyro:  X=[%.1f,%.1f,%.1f] Y=[%.1f,%.1f,%.1f] Z=[%.1f,%.1f,%.1f]\n",
+		gyroMount.X.X, gyroMount.X.Y, gyroMount.X.Z,
+		gyroMount.Y.X, gyroMount.Y.Y, gyroMount.Y.Z,
+		gyroMount.Z.X, gyroMount.Z.Y, gyroMount.Z.Z)
 
 	// DSU server: escucha en 0.0.0.0:26760 (lo espera Yuzu/Cemuhook)
 	srv, err := NewDSUServer("0.0.0.0:26760")
@@ -739,9 +796,16 @@ func main() {
 				s.Accel = as.Accel
 			}
 		}
-		// Apply mount matrix
-		s.Gyro = mount.Apply(s.Gyro)
-		s.Accel = mount.Apply(s.Accel)
+
+		// Debug: show raw values before mount matrix transformation
+		if *debugRaw && *logEvery > 0 && count%*logEvery == 0 {
+			fmt.Printf("RAW  G(rad/s)=(% .5f,% .5f,% .5f)  A(m/s^2)=(% .3f,% .3f,% .3f)\n",
+				s.Gyro.X, s.Gyro.Y, s.Gyro.Z, s.Accel.X, s.Accel.Y, s.Accel.Z)
+		}
+
+		// Apply separate mount matrices for gyro and accel
+		s.Gyro = gyroMount.Apply(s.Gyro)
+		s.Accel = accelMount.Apply(s.Accel)
 
 		// Warn if gyro stays zero for extended period (likely misconfigured)
 		if s.Gyro.X == 0 && s.Gyro.Y == 0 && s.Gyro.Z == 0 {
@@ -758,9 +822,22 @@ func main() {
 		if *logEvery > 0 {
 			count++
 			if count%*logEvery == 0 {
-				fmt.Printf("IMU ts=%d  G(rad/s)=(% .5f,% .5f,% .5f)  A(m/s^2)=(% .3f,% .3f,% .3f)\n",
+				fmt.Printf("IMU  ts=%d  G(rad/s)=(% .5f,% .5f,% .5f)  A(m/s^2)=(% .3f,% .3f,% .3f)\n",
 					s.TSus, s.Gyro.X, s.Gyro.Y, s.Gyro.Z, s.Accel.X, s.Accel.Y, s.Accel.Z)
 			}
+		}
+
+		// Debug: show DSU packet values (in g and deg/s)
+		if *debugDSU && *logEvery > 0 && count%*logEvery == 0 {
+			const rad2deg = 180.0 / math.Pi
+			ax := s.Accel.X / 9.80665
+			ay := s.Accel.Y / 9.80665
+			az := s.Accel.Z / 9.80665
+			gx := s.Gyro.X * rad2deg
+			gy := s.Gyro.Y * rad2deg
+			gz := s.Gyro.Z * rad2deg
+			fmt.Printf("DSU  G(deg/s)=(% .2f,% .2f,% .2f)  A(g)=(% .3f,% .3f,% .3f)\n",
+				gx, gy, gz, ax, ay, az)
 		}
 
 		srv.Broadcast(s)

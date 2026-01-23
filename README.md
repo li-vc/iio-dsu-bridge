@@ -4,8 +4,8 @@ IIO Bridge to generate motion sensor data for a DSU server, enabling gyro/motion
 
 ## Supported Devices
 
-- **Legion Go S** - Separate accelerometer and gyroscope IIO devices
 - **ROG Ally** - Combined IMU device
+- **Legion Go S** - Separate accelerometer and gyroscope IIO devices
 
 ## Quick Install (SteamOS Desktop Mode)
 

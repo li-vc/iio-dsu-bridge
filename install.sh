@@ -28,21 +28,36 @@ if ! command -v curl >/dev/null 2>&1; then
   exit 1
 fi
 
+# Check if running interactively
+if [ ! -t 0 ]; then
+  echo "This installer requires interactive input."
+  echo ""
+  echo "Please run one of these commands instead:"
+  echo ""
+  echo "  bash <(curl -fsSL ${RELEASE_URL}/install.sh)"
+  echo ""
+  echo "Or download and run manually:"
+  echo "  curl -fLO ${RELEASE_URL}/install.sh"
+  echo "  bash install.sh"
+  echo ""
+  exit 1
+fi
+
 # Interactive device selection
 echo "==> Select your device:"
-echo "  1) Legion Go S"
-echo "  2) ROG Ally"
+echo "  1) ROG Ally"
+echo "  2) Legion Go S"
 echo ""
 read -p "Enter choice [1-2]: " DEVICE_CHOICE
 
 case "$DEVICE_CHOICE" in
   1)
-    CONFIG_URL="${RELEASE_URL}/legion-go-s.yaml"
-    DEVICE_NAME="Legion Go S"
-    ;;
-  2)
     CONFIG_URL="${RELEASE_URL}/rog-ally.yaml"
     DEVICE_NAME="ROG Ally"
+    ;;
+  2)
+    CONFIG_URL="${RELEASE_URL}/legion-go-s.yaml"
+    DEVICE_NAME="Legion Go S"
     ;;
   *)
     echo "Invalid choice. Exiting."
@@ -110,4 +125,4 @@ echo "View logs with:"
 echo "  journalctl --user -u ${SERVICE_NAME} -f"
 echo ""
 echo "To uninstall, run:"
-echo "  curl -fL ${RELEASE_URL}/uninstall.sh | bash"
+echo "  bash <(curl -fsSL ${RELEASE_URL}/uninstall.sh)"

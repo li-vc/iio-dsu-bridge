@@ -17,7 +17,7 @@ IIO Bridge to generate motion sensor data for a DSU server, enabling gyro/motion
 
 ### Option 2: Terminal
 ```bash
-curl -fL https://github.com/TDemeco/iio-dsu-bridge/releases/latest/download/install.sh | bash
+bash <(curl -fsSL https://github.com/TDemeco/iio-dsu-bridge/releases/latest/download/install.sh)
 ```
 
 The installer will:
@@ -103,8 +103,8 @@ accel_matrix:
 
 gyro_matrix:
   x: [1, 0, 0]
-  y: [0, 1, 0]
-  z: [0, 0, 1]
+  y: [0, 0, 1]
+  z: [0, 1, 0]
 ```
 
 ### ROG Ally Config
@@ -177,7 +177,7 @@ curl -fL https://github.com/TDemeco/iio-dsu-bridge/releases/latest/download/rog-
 
 ### Option 1: Script
 ```bash
-curl -fL https://github.com/TDemeco/iio-dsu-bridge/releases/latest/download/uninstall.sh | bash
+bash <(curl -fsSL https://github.com/TDemeco/iio-dsu-bridge/releases/latest/download/uninstall.sh)
 ```
 
 ### Option 2: Desktop Shortcut

@@ -21,7 +21,6 @@ echo "==> Removing files..."
 rm -f "$SERVICE_FILE"
 rm -f "$BIN_PATH"
 rm -f "$CONFIG_FILE"
-rm -f "$HOME/Desktop/uninstall-iio-dsu-bridge.desktop"
 
 echo "==> Reloading systemd user daemon..."
 systemctl --user daemon-reload 2>/dev/null || true
@@ -35,4 +34,3 @@ echo "Removed:"
 echo "  - $BIN_PATH"
 echo "  - $CONFIG_FILE"
 echo "  - $SERVICE_FILE"
-echo "  - ~/Desktop/uninstall-iio-dsu-bridge.desktop"

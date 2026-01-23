@@ -4,58 +4,50 @@ IIO Bridge to generate motion sensor data for a DSU server, enabling gyro/motion
 
 ## Supported Devices
 
-- **ROG Ally** - Combined IMU device (works out of the box)
-- **Legion Go S** - Separate accelerometer and gyroscope IIO devices (requires config file)
+- **Legion Go S** - Separate accelerometer and gyroscope IIO devices
+- **ROG Ally** - Combined IMU device
 
 ## Quick Install (SteamOS Desktop Mode)
 
+### Option 1: Desktop Shortcut
 1. Download `install-iio-dsu-bridge.desktop` from the latest Release
 2. In Dolphin, right-click it and click **Allow Launching**
 3. Double-click it to run the installer
+4. Select your device when prompted (Legion Go S or ROG Ally)
+
+### Option 2: Terminal
+```bash
+curl -fL https://github.com/TDemeco/iio-dsu-bridge/releases/latest/download/install.sh | bash
+```
+
+The installer will:
+1. Ask which device you have
+2. Download the binary and device-specific config
+3. Create and enable a systemd user service
+4. Start the bridge automatically
 
 **View logs:** `journalctl --user -u iio-dsu-bridge -f`
 
-## Legion Go S Setup
-
-The Legion Go S requires a configuration file to correct sensor axis orientation:
-
-```bash
-# Copy the example config
-mkdir -p ~/.config
-cp examples/legion-go-s.yaml ~/.config/iio-dsu-bridge.yaml
-
-# Restart the service
-systemctl --user restart iio-dsu-bridge
-```
-
-Or create the config manually:
-
-```bash
-cat > ~/.config/iio-dsu-bridge.yaml << 'EOF'
-accel_matrix:
-  x: [1, 0, 0]
-  y: [0, 1, 0]
-  z: [0, 0, -1]
-
-gyro_matrix:
-  x: [1, 0, 0]
-  y: [0, 1, 0]
-  z: [0, 0, 1]
-EOF
-```
-
 ## Manual Installation
 
-```bash
-# Build
-go build -o iio-dsu-bridge .
+If you prefer to install manually:
 
-# Copy binary
+```bash
+# 1. Download the binary
 mkdir -p ~/.local/bin
-cp iio-dsu-bridge ~/.local/bin/
+curl -fL https://github.com/TDemeco/iio-dsu-bridge/releases/latest/download/iio-dsu-bridge -o ~/.local/bin/iio-dsu-bridge
 chmod +x ~/.local/bin/iio-dsu-bridge
 
-# Create systemd service
+# 2. Download the config for your device
+mkdir -p ~/.config
+
+# For Legion Go S:
+curl -fL https://github.com/TDemeco/iio-dsu-bridge/releases/latest/download/legion-go-s.yaml -o ~/.config/iio-dsu-bridge.yaml
+
+# For ROG Ally:
+curl -fL https://github.com/TDemeco/iio-dsu-bridge/releases/latest/download/rog-ally.yaml -o ~/.config/iio-dsu-bridge.yaml
+
+# 3. Create systemd service
 mkdir -p ~/.config/systemd/user
 cat > ~/.config/systemd/user/iio-dsu-bridge.service << 'EOF'
 [Unit]
@@ -72,71 +64,12 @@ RestartSec=5
 WantedBy=default.target
 EOF
 
-# Enable and start
+# 4. Enable and start
 systemctl --user daemon-reload
 systemctl --user enable --now iio-dsu-bridge.service
 
-# Enable linger for auto-start without login
+# 5. Enable auto-start on boot (optional)
 sudo loginctl enable-linger $USER
-```
-
-## Usage
-
-```bash
-# List detected IIO devices
-./iio-dsu-bridge --list-iio
-
-# Run with logging
-./iio-dsu-bridge --log-every=25
-
-# Debug mode (show raw and DSU values)
-./iio-dsu-bridge --debug-raw --debug-dsu --log-every=10
-```
-
-## Command Line Options
-
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--list-iio` | false | List detected IIO devices and exit |
-| `--name` | "" | IIO device name (empty = auto-detect) |
-| `--iio-path` | "" | Explicit IIO device path (overrides --name) |
-| `--addr` | 127.0.0.1:26760 | DSU server address |
-| `--rate` | 250 | Output rate in Hz |
-| `--log-every` | 25 | Print IMU data every N samples (0 = off) |
-| `--set-scales` | true | Auto-set sensor scales if zero |
-| `--set-rate` | true | Auto-set sampling frequency |
-| `--debug-raw` | false | Show raw sensor values before transformation |
-| `--debug-dsu` | false | Show final DSU packet values |
-
-## Configuration File
-
-Place configuration at `~/.config/iio-dsu-bridge.yaml`
-
-### Separate Matrices (Legion Go S)
-
-When accelerometer and gyroscope have different orientations:
-
-```yaml
-accel_matrix:
-  x: [1, 0, 0]
-  y: [0, 1, 0]
-  z: [0, 0, -1]
-
-gyro_matrix:
-  x: [1, 0, 0]
-  y: [0, 1, 0]
-  z: [0, 0, 1]
-```
-
-### Single Matrix (ROG Ally)
-
-When both sensors share the same orientation:
-
-```yaml
-mount_matrix:
-  x: [1, 0, 0]
-  y: [0, -1, 0]
-  z: [0, 0, -1]
 ```
 
 ## Emulator Setup
@@ -155,6 +88,48 @@ mount_matrix:
 1. Options → Settings → Input
 2. Motion: `CemuHook compatible motion server`
 3. Server: `127.0.0.1:26760`
+
+## Configuration
+
+The config file is located at `~/.config/iio-dsu-bridge.yaml`
+
+### Legion Go S Config
+
+```yaml
+accel_matrix:
+  x: [1, 0, 0]
+  y: [0, 1, 0]
+  z: [0, 0, -1]
+
+gyro_matrix:
+  x: [1, 0, 0]
+  y: [0, 1, 0]
+  z: [0, 0, 1]
+```
+
+### ROG Ally Config
+
+```yaml
+mount_matrix:
+  x: [1, 0, 0]
+  y: [0, -1, 0]
+  z: [0, 0, -1]
+```
+
+## Command Line Options
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--list-iio` | false | List detected IIO devices and exit |
+| `--name` | "" | IIO device name (empty = auto-detect) |
+| `--iio-path` | "" | Explicit IIO device path (overrides --name) |
+| `--addr` | 127.0.0.1:26760 | DSU server address |
+| `--rate` | 250 | Output rate in Hz |
+| `--log-every` | 25 | Print IMU data every N samples (0 = off) |
+| `--set-scales` | true | Auto-set sensor scales if zero |
+| `--set-rate` | true | Auto-set sampling frequency |
+| `--debug-raw` | false | Show raw sensor values before transformation |
+| `--debug-dsu` | false | Show final DSU packet values |
 
 ## Troubleshooting
 
@@ -185,8 +160,30 @@ sudo ./iio-dsu-bridge --list-iio
 ### Motion feels wrong (pulling back, jittery)
 The mount matrix likely needs adjustment. Use `--debug-raw --debug-dsu` to diagnose, then adjust the matrix in the config file.
 
+### No config file error
+```
+ERROR: No mount matrix configured.
+```
+You need a config file. Download the one for your device:
+```bash
+# Legion Go S
+curl -fL https://github.com/TDemeco/iio-dsu-bridge/releases/latest/download/legion-go-s.yaml -o ~/.config/iio-dsu-bridge.yaml
+
+# ROG Ally
+curl -fL https://github.com/TDemeco/iio-dsu-bridge/releases/latest/download/rog-ally.yaml -o ~/.config/iio-dsu-bridge.yaml
+```
+
 ## Uninstall
 
+### Option 1: Script
+```bash
+curl -fL https://github.com/TDemeco/iio-dsu-bridge/releases/latest/download/uninstall.sh | bash
+```
+
+### Option 2: Desktop Shortcut
+Download and double-click `uninstall-iio-dsu-bridge.desktop`
+
+### Option 3: Manual
 ```bash
 systemctl --user disable --now iio-dsu-bridge.service
 rm ~/.config/systemd/user/iio-dsu-bridge.service
@@ -195,4 +192,21 @@ rm ~/.config/iio-dsu-bridge.yaml
 systemctl --user daemon-reload
 ```
 
-Or download and double-click `uninstall-iio-dsu-bridge.desktop`.
+## Building from Source
+
+```bash
+# Clone the repository
+git clone https://github.com/TDemeco/iio-dsu-bridge.git
+cd iio-dsu-bridge
+
+# Build
+go build -o iio-dsu-bridge .
+
+# Copy config for your device
+cp examples/legion-go-s.yaml ~/.config/iio-dsu-bridge.yaml
+# or
+cp examples/rog-ally.yaml ~/.config/iio-dsu-bridge.yaml
+
+# Run
+./iio-dsu-bridge --log-every=25
+```

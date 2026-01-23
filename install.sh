@@ -1,44 +1,82 @@
 #!/usr/bin/env bash
 set -e
 
-# Minimal installer for iio-dsu-bridge (user service, SteamOS-friendly)
-# 1) Downloads the binary
-# 2) Creates a systemd --user service
-# 3) Enables and starts it
-#
-# Edit BIN_URL to match your Release asset URL.
-# Example for "latest":
-#   https://github.com/Sebalvarez97/iio-dsu-bridge/releases/latest/download/iio-dsu-bridge
+# Installer for iio-dsu-bridge (user service, SteamOS-friendly)
+# 1) Asks which device you have
+# 2) Downloads the binary and device-specific config
+# 3) Creates a systemd --user service
+# 4) Enables and starts it
 
 SERVICE_NAME="iio-dsu-bridge"
 BIN_DIR="$HOME/.local/bin"
 BIN_PATH="$BIN_DIR/iio-dsu-bridge"
-SERVICE_FILE="$HOME/.config/systemd/user/${SERVICE_NAME}.service"
+CONFIG_DIR="$HOME/.config"
+CONFIG_FILE="$CONFIG_DIR/iio-dsu-bridge.yaml"
+SERVICE_FILE="$CONFIG_DIR/systemd/user/${SERVICE_NAME}.service"
 
-# TODO: replace with your actual asset URL before publishing
-BIN_URL="https://github.com/Sebalvarez97/iio-dsu-bridge/releases/latest/download/iio-dsu-bridge"
+# Base URL for release assets
+RELEASE_URL="https://github.com/TDemeco/iio-dsu-bridge/releases/latest/download"
 
-echo "==> Creating required folders..."
-mkdir -p "$BIN_DIR"
-mkdir -p "$(dirname "$SERVICE_FILE")"
+echo "============================================"
+echo "  iio-dsu-bridge Installer"
+echo "============================================"
+echo ""
 
-echo "==> Downloading binary from: $BIN_URL"
+# Check for curl
 if ! command -v curl >/dev/null 2>&1; then
   echo "error: curl is required" >&2
   exit 1
 fi
-curl -fL "$BIN_URL" -o "$BIN_PATH"
+
+# Interactive device selection
+echo "==> Select your device:"
+echo "  1) Legion Go S"
+echo "  2) ROG Ally"
+echo ""
+read -p "Enter choice [1-2]: " DEVICE_CHOICE
+
+case "$DEVICE_CHOICE" in
+  1)
+    CONFIG_URL="${RELEASE_URL}/legion-go-s.yaml"
+    DEVICE_NAME="Legion Go S"
+    ;;
+  2)
+    CONFIG_URL="${RELEASE_URL}/rog-ally.yaml"
+    DEVICE_NAME="ROG Ally"
+    ;;
+  *)
+    echo "Invalid choice. Exiting."
+    exit 1
+    ;;
+esac
+
+echo ""
+echo "==> Installing for: $DEVICE_NAME"
+echo ""
+
+echo "==> Creating required folders..."
+mkdir -p "$BIN_DIR"
+mkdir -p "$CONFIG_DIR"
+mkdir -p "$(dirname "$SERVICE_FILE")"
+
+echo "==> Downloading binary..."
+curl -fL "${RELEASE_URL}/iio-dsu-bridge" -o "$BIN_PATH"
 chmod +x "$BIN_PATH"
+
+echo "==> Downloading config for $DEVICE_NAME..."
+curl -fL "$CONFIG_URL" -o "$CONFIG_FILE"
 
 echo "==> Writing user service: $SERVICE_FILE"
 cat > "$SERVICE_FILE" <<EOF
 [Unit]
-Description=IIO -> DSU Bridge (ROG Ally)
-After=network.target
+Description=IIO to DSU Bridge for Gyro/Motion Controls ($DEVICE_NAME)
+After=default.target
 
 [Service]
-ExecStart=$BIN_PATH -rate=250 -addr=127.0.0.1:26760
+Type=simple
+ExecStart=$BIN_PATH --rate=250 --log-every=0
 Restart=on-failure
+RestartSec=5
 
 [Install]
 WantedBy=default.target
@@ -47,10 +85,29 @@ EOF
 echo "==> Reloading systemd user daemon and enabling service..."
 systemctl --user daemon-reload
 systemctl --user enable --now "${SERVICE_NAME}.service" || {
+  echo ""
   echo "Hint: If systemd --user isn't active in this shell, try re-login or run:"
   echo "      systemctl --user daemon-reload && systemctl --user enable --now ${SERVICE_NAME}.service"
   exit 1
 }
 
-echo "==> Done. Follow logs with:"
-echo "journalctl --user -u ${SERVICE_NAME} -f"
+# Enable linger so service starts on boot without login
+if command -v loginctl >/dev/null 2>&1; then
+  echo "==> Enabling user service auto-start on boot..."
+  sudo loginctl enable-linger "$USER" 2>/dev/null || true
+fi
+
+echo ""
+echo "============================================"
+echo "  Installation complete!"
+echo "============================================"
+echo ""
+echo "Config file: $CONFIG_FILE"
+echo "Binary:      $BIN_PATH"
+echo "Service:     $SERVICE_FILE"
+echo ""
+echo "View logs with:"
+echo "  journalctl --user -u ${SERVICE_NAME} -f"
+echo ""
+echo "To uninstall, run:"
+echo "  curl -fL ${RELEASE_URL}/uninstall.sh | bash"

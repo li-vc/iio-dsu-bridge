@@ -685,19 +685,6 @@ func main() {
 		fmt.Fprintf(os.Stderr, "         Try running with elevated permissions or check if the device driver is loaded.\n")
 	}
 
-	// Separate mount matrices for accelerometer and gyroscope
-	// This allows correcting for different physical orientations of the sensors
-	identityMatrix := MountMatrix{
-		X: Vec3{1, 0, 0},
-		Y: Vec3{0, 1, 0},
-		Z: Vec3{0, 0, 1},
-	}
-	rogAllyMatrix := MountMatrix{
-		X: Vec3{1, 0, 0},
-		Y: Vec3{0, -1, 0},
-		Z: Vec3{0, 0, -1},
-	}
-
 	// Helper to parse matrix from config
 	parseMatrix := func(x, y, z []float64) (MountMatrix, bool) {
 		if len(x) == 3 && len(y) == 3 && len(z) == 3 {
@@ -710,45 +697,44 @@ func main() {
 		return MountMatrix{}, false
 	}
 
-	// Determine base matrix (from mount_matrix or device detection)
-	var baseMatrix MountMatrix
-	var baseMatrixSource string
+	// Check if any matrix is configured (config file is required)
+	hasAccelMatrix := len(cfg.AccelMatrix.X) == 3 && len(cfg.AccelMatrix.Y) == 3 && len(cfg.AccelMatrix.Z) == 3
+	hasGyroMatrix := len(cfg.GyroMatrix.X) == 3 && len(cfg.GyroMatrix.Y) == 3 && len(cfg.GyroMatrix.Z) == 3
+	hasMountMatrix := len(cfg.MountMatrix.X) == 3 && len(cfg.MountMatrix.Y) == 3 && len(cfg.MountMatrix.Z) == 3
 
-	if m, ok := parseMatrix(cfg.MountMatrix.X, cfg.MountMatrix.Y, cfg.MountMatrix.Z); ok {
-		baseMatrix = m
-		baseMatrixSource = "config mount_matrix"
-	} else {
-		// Auto-detect device and use appropriate default
-		devNameBytes, _ := os.ReadFile(filepath.Join(iioBase, "name"))
-		devName := strings.ToLower(strings.TrimSpace(string(devNameBytes)))
-
-		if strings.Contains(devName, "legion") || strings.Contains(devName, "bmi") {
-			baseMatrix = identityMatrix
-			baseMatrixSource = fmt.Sprintf("Legion Go S default (device: %s)", devName)
-		} else {
-			baseMatrix = rogAllyMatrix
-			baseMatrixSource = fmt.Sprintf("ROG Ally default (device: %s)", devName)
-		}
+	if !hasAccelMatrix && !hasGyroMatrix && !hasMountMatrix {
+		fmt.Fprintf(os.Stderr, "ERROR: No mount matrix configured.\n")
+		fmt.Fprintf(os.Stderr, "Please create a config file at ~/.config/iio-dsu-bridge.yaml\n")
+		fmt.Fprintf(os.Stderr, "Example configs for supported devices:\n")
+		fmt.Fprintf(os.Stderr, "  - Legion Go S: https://github.com/TDemeco/iio-dsu-bridge/blob/main/examples/legion-go-s.yaml\n")
+		fmt.Fprintf(os.Stderr, "  - ROG Ally:    https://github.com/TDemeco/iio-dsu-bridge/blob/main/examples/rog-ally.yaml\n")
+		os.Exit(1)
 	}
 
-	// Set accel matrix: accel_matrix > mount_matrix > device default
+	// Parse base mount_matrix (used as fallback for accel/gyro if not specified separately)
+	var baseMatrix MountMatrix
+	if m, ok := parseMatrix(cfg.MountMatrix.X, cfg.MountMatrix.Y, cfg.MountMatrix.Z); ok {
+		baseMatrix = m
+	}
+
+	// Set accel matrix: accel_matrix > mount_matrix
 	var accelMount MountMatrix
 	if m, ok := parseMatrix(cfg.AccelMatrix.X, cfg.AccelMatrix.Y, cfg.AccelMatrix.Z); ok {
 		accelMount = m
 		fmt.Println("Accel matrix: from config accel_matrix")
-	} else {
+	} else if hasMountMatrix {
 		accelMount = baseMatrix
-		fmt.Printf("Accel matrix: from %s\n", baseMatrixSource)
+		fmt.Println("Accel matrix: from config mount_matrix")
 	}
 
-	// Set gyro matrix: gyro_matrix > mount_matrix > device default
+	// Set gyro matrix: gyro_matrix > mount_matrix
 	var gyroMount MountMatrix
 	if m, ok := parseMatrix(cfg.GyroMatrix.X, cfg.GyroMatrix.Y, cfg.GyroMatrix.Z); ok {
 		gyroMount = m
 		fmt.Println("Gyro matrix: from config gyro_matrix")
-	} else {
+	} else if hasMountMatrix {
 		gyroMount = baseMatrix
-		fmt.Printf("Gyro matrix: from %s\n", baseMatrixSource)
+		fmt.Println("Gyro matrix: from config mount_matrix")
 	}
 
 	// Log the actual matrices being used

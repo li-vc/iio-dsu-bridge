@@ -3,6 +3,6 @@ Type=Application
 Name=Uninstall IIO-DSU Bridge
 Comment=Stop and remove the user service, binary, and config
 Terminal=true
-Exec=bash -lc 'bash <(curl -fsSL https://github.com/Sebalvarez97/iio-dsu-bridge/releases/latest/download/uninstall.sh); echo; read -n1 -rsp "Done. Press any key to close... "'
+Exec=bash -lc 'bash <(curl -fsSL https://github.com/li-vc/iio-dsu-bridge/releases/latest/download/uninstall.sh); echo; read -n1 -rsp "Done. Press any key to close... "'
 Icon=edit-delete
 Categories=Utility;

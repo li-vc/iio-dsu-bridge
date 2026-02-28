@@ -14,8 +14,10 @@ CONFIG_DIR="$HOME/.config"
 CONFIG_FILE="$CONFIG_DIR/iio-dsu-bridge.yaml"
 SERVICE_FILE="$CONFIG_DIR/systemd/user/${SERVICE_NAME}.service"
 
-# Base URL for release assets
-RELEASE_URL="https://github.com/Sebalvarez97/iio-dsu-bridge/releases/latest/download"
+# Base URL for release assets (current repo)
+RELEASE_URL="https://github.com/li-vc/iio-dsu-bridge/releases/latest/download"
+# Base URL for raw files in this repo (used for YAML configs)
+RAW_BASE_URL="https://raw.githubusercontent.com/li-vc/iio-dsu-bridge/main"
 
 echo "============================================"
 echo "  iio-dsu-bridge Installer"
@@ -52,11 +54,11 @@ read -p "Enter choice [1-2]: " DEVICE_CHOICE
 
 case "$DEVICE_CHOICE" in
   1)
-    CONFIG_URL="${RELEASE_URL}/rog-ally.yaml"
+    CONFIG_URL="${RAW_BASE_URL}/examples/rog-ally.yaml"
     DEVICE_NAME="ROG Ally"
     ;;
   2)
-    CONFIG_URL="${RELEASE_URL}/legion-go-s.yaml"
+    CONFIG_URL="${RAW_BASE_URL}/examples/legion-go-s.yaml"
     DEVICE_NAME="Legion Go S"
     ;;
   *)

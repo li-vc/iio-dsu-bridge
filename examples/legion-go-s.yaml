@@ -15,8 +15,8 @@ accel_matrix:
     z: [0, 0, -1]
 
 # Gyroscope mount matrix
-# Y and Z axes are swapped on Legion Go S, and X is inverted to fix pitch direction
+# Y and Z axes are swapped on Legion Go S
 gyro_matrix:
-    x: [-1, 0, 0]
+    x: [1, 0, 0]
     y: [0, 0, 1]
     z: [0, 1, 0]
